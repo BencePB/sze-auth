@@ -4,4 +4,4 @@
     android:accessibilityFeedbackType="feedbackGeneric"
     android:canRetrieveWindowContent="true"
     android:notificationTimeout="100"
-    android:description="Lets the Neptun Quick Settings tile type your 2FA code into the currently focused field when you tap it. It only acts when you tap the tile; it never reads or reports screen content in the background." />
+    android:description="@string/accessibility_service_description" />
