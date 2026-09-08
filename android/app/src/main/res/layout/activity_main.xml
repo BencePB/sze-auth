@@ -33,6 +33,38 @@
         android:layout_marginTop="8dp"
         android:text="Save secret" />
 
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="32dp"
+        android:textStyle="bold"
+        android:text="Current code (guaranteed fallback):" />
+
+    <TextView
+        android:id="@+id/liveCode"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:textSize="36sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:letterSpacing="0.3"
+        android:text="------" />
+
+    <TextView
+        android:id="@+id/liveTimer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="" />
+
+    <Button
+        android:id="@+id/copyButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="Copy code to clipboard" />
+
     <Button
         android:id="@+id/enableButton"
         android:layout_width="match_parent"
