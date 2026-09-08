@@ -9,6 +9,7 @@ import android.service.autofill.FillRequest
 import android.service.autofill.FillResponse
 import android.service.autofill.SaveCallback
 import android.service.autofill.SaveRequest
+import android.text.InputType
 import android.view.autofill.AutofillId
 import android.view.autofill.AutofillValue
 import android.widget.RemoteViews
@@ -22,7 +23,13 @@ class NeptunAutofillService : AutofillService() {
 
     private val targetDomain = "neptun-hweb.sze.hu"
 
-    private val codeFieldHints = listOf("otp", "token", "code", "totp", "2fa")
+    // English + Hungarian keywords that might appear in id/hint/html attrs
+    // of the Neptun 2FA field ("kod"/"k\u00f3d" = code, "hitelesito" = authenticator,
+    // "azonosito" = identification).
+    private val codeFieldHints = listOf(
+        "otp", "token", "code", "totp", "2fa", "onetimecode", "smsotp",
+        "kod", "k\u00f3d", "hitelesito", "hiteles\u00edt\u0151", "azonosito", "azonos\u00edt\u00f3", "pin"
+    )
 
     override fun onFillRequest(
         request: FillRequest,
@@ -92,31 +99,69 @@ class NeptunAutofillService : AutofillService() {
     }
 
     private fun findOtpFieldId(structure: AssistStructure): AutofillId? {
+        val editableNodes = mutableListOf<AssistStructure.ViewNode>()
         for (i in 0 until structure.windowNodeCount) {
             val root = structure.getWindowNodeAt(i).rootViewNode
-            val found = searchNode(root)
-            if (found != null) return found
+            collectEditableNodes(root, editableNodes)
         }
+
+        // Pass 1: keyword match against id/hint/html attributes/autofill hints
+        for (node in editableNodes) {
+            if (nodeMatchesKeyword(node) && node.autofillId != null) {
+                return node.autofillId
+            }
+        }
+
+        // Pass 2: fallback -- if the whole page has exactly one editable/text
+        // field (typical for a dedicated 2FA screen), assume that's the one.
+        if (editableNodes.size == 1) {
+            return editableNodes[0].autofillId
+        }
+
+        // Pass 3: fallback -- prefer a numeric-input field with a short max
+        // length (6-digit codes), if there's exactly one such field.
+        val numericShortFields = editableNodes.filter { node ->
+            val isNumeric = (node.inputType and InputType.TYPE_CLASS_NUMBER) != 0
+            val shortLength = node.autofillHints == null || true // maxLength not always reported
+            isNumeric
+        }
+        if (numericShortFields.size == 1) {
+            return numericShortFields[0].autofillId
+        }
+
         return null
     }
 
-    private fun searchNode(node: AssistStructure.ViewNode): AutofillId? {
+    private fun nodeMatchesKeyword(node: AssistStructure.ViewNode): Boolean {
         val idEntry = node.idEntry?.lowercase() ?: ""
         val hint = node.hint?.lowercase() ?: ""
-        val htmlAttrs = node.htmlInfo?.attributes?.joinToString(" ") { "${it.first}=${it.second}" }?.lowercase() ?: ""
+        val htmlAttrs = node.htmlInfo?.attributes
+            ?.joinToString(" ") { "${it.first}=${it.second}" }
+            ?.lowercase() ?: ""
+        val autofillHintsMatch = node.autofillHints?.any {
+            it.lowercase().contains("otp") || it.lowercase().contains("onetime")
+        } == true
 
-        val isCandidate = codeFieldHints.any {
+        return autofillHintsMatch || codeFieldHints.any {
             idEntry.contains(it) || hint.contains(it) || htmlAttrs.contains(it)
-        } || node.autofillHints?.any { it.contains("otp", ignoreCase = true) } == true
+        }
+    }
 
-        if (isCandidate && node.autofillId != null) {
-            return node.autofillId
+    private fun collectEditableNodes(
+        node: AssistStructure.ViewNode,
+        out: MutableList<AssistStructure.ViewNode>
+    ) {
+        val isEditableHtmlInput = node.htmlInfo?.tag?.equals("input", ignoreCase = true) == true
+        val hasAutofillId = node.autofillId != null
+        val looksEditable = node.isEnabled && hasAutofillId &&
+            (isEditableHtmlInput || node.className?.contains("EditText") == true || node.inputType != 0)
+
+        if (looksEditable) {
+            out.add(node)
         }
 
         for (i in 0 until node.childCount) {
-            val result = searchNode(node.getChildAt(i))
-            if (result != null) return result
+            collectEditableNodes(node.getChildAt(i), out)
         }
-        return null
     }
 }
