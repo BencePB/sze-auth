@@ -24,10 +24,20 @@ import androidx.appcompat.app.AppCompatActivity
  * directly, so it can inject the current TOTP code via JavaScript once the
  * field appears -- no Accessibility Service, Quick Settings Tile, or
  * separate Autofill Service registration required.
+ *
+ * NOTE: WebView normally identifies itself with a "; wv" token in its
+ * user-agent string, which Neptun's own browser-detection blocks as an
+ * "unsupported browser". The user-agent below overrides that with a
+ * standard Chrome-for-Android string so the site loads normally. This is
+ * only intended for the account owner's own personal, authenticated use.
  */
 class MainActivity : AppCompatActivity() {
 
     private val neptunUrl = "https://neptun-hweb.sze.hu/"
+    private val chromeUserAgent =
+        "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 " +
+        "(KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36"
+
     private val handler = Handler(Looper.getMainLooper())
     private var fillLoopRunning = false
 
@@ -59,6 +69,7 @@ class MainActivity : AppCompatActivity() {
         webView.settings.domStorageEnabled = true
         webView.settings.useWideViewPort = true
         webView.settings.loadWithOverviewMode = true
+        webView.settings.userAgentString = chromeUserAgent
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
