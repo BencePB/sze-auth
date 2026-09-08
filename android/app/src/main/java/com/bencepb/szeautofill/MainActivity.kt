@@ -1,51 +1,75 @@
 package com.bencepb.szeautofill
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
+import android.annotation.SuppressLint
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.provider.Settings
+import android.view.View
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.EditText
-import android.widget.TextView
-import android.widget.Toast
+import android.widget.LinearLayout
 import androidx.appcompat.app.AppCompatActivity
 
+/**
+ * Hosts Neptun inside an in-app WebView.
+ *
+ * Google's (or any other) autofill for the username/password fields keeps
+ * working exactly as it would in Chrome, since Android's WebView uses the
+ * same Chromium engine and the same system Autofill Framework hooks --
+ * nothing about that is disabled here.
+ *
+ * For the 2FA code field specifically, this activity owns the WebView
+ * directly, so it can inject the current TOTP code via JavaScript once the
+ * field appears -- no Accessibility Service, Quick Settings Tile, or
+ * separate Autofill Service registration required.
+ */
 class MainActivity : AppCompatActivity() {
 
+    private val neptunUrl = "https://neptun-hweb.sze.hu/"
     private val handler = Handler(Looper.getMainLooper())
-    private var tickerRunning = false
+    private var fillLoopRunning = false
 
-    private lateinit var liveCode: TextView
-    private lateinit var liveTimer: TextView
+    private lateinit var webView: WebView
 
-    private val ticker = object : Runnable {
+    private val fillLoop = object : Runnable {
         override fun run() {
-            updateLiveCode()
-            if (tickerRunning) {
+            injectCurrentCode()
+            if (fillLoopRunning) {
                 handler.postDelayed(this, 1000)
             }
         }
     }
 
+    @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        val setupPanel = findViewById<LinearLayout>(R.id.setupPanel)
+        val browserBar = findViewById<LinearLayout>(R.id.browserBar)
         val secretInput = findViewById<EditText>(R.id.secretInput)
         val saveButton = findViewById<Button>(R.id.saveButton)
-        val enableButton = findViewById<Button>(R.id.enableButton)
-        val copyButton = findViewById<Button>(R.id.copyButton)
-        val statusText = findViewById<TextView>(R.id.statusText)
-        liveCode = findViewById(R.id.liveCode)
-        liveTimer = findViewById(R.id.liveTimer)
+        val changeSecretButton = findViewById<Button>(R.id.changeSecretButton)
+        val reloadButton = findViewById<Button>(R.id.reloadButton)
+        webView = findViewById(R.id.webView)
 
-        SecretStore.load(this)?.let {
-            statusText.text = "Secret saved. Use the button below any time to copy the current code."
+        webView.settings.javaScriptEnabled = true
+        webView.settings.domStorageEnabled = true
+        webView.settings.useWideViewPort = true
+        webView.settings.loadWithOverviewMode = true
+        webView.webViewClient = object : WebViewClient() {
+            override fun onPageFinished(view: WebView?, url: String?) {
+                super.onPageFinished(view, url)
+                injectCurrentCode()
+            }
+        }
+
+        val hasSecret = !SecretStore.load(this).isNullOrBlank()
+        if (hasSecret) {
+            showBrowser(setupPanel, browserBar)
+            webView.loadUrl(neptunUrl)
         }
 
         saveButton.setOnClickListener {
@@ -53,50 +77,76 @@ class MainActivity : AppCompatActivity() {
             if (value.isNotEmpty()) {
                 SecretStore.save(this, value)
                 secretInput.text.clear()
-                statusText.text = "Secret saved. Use the button below any time to copy the current code."
-                updateLiveCode()
+                showBrowser(setupPanel, browserBar)
+                webView.loadUrl(neptunUrl)
             }
         }
 
-        copyButton.setOnClickListener {
-            val secret = SecretStore.load(this)
-            if (secret.isNullOrBlank()) {
-                Toast.makeText(this, "Save your secret first", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-            val code = Totp.generate(secret)
-            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            clipboard.setPrimaryClip(ClipData.newPlainText("Neptun code", code))
-            Toast.makeText(this, "Copied: $code", Toast.LENGTH_SHORT).show()
+        changeSecretButton.setOnClickListener {
+            browserBar.visibility = View.GONE
+            webView.visibility = View.GONE
+            setupPanel.visibility = View.VISIBLE
         }
 
-        enableButton.setOnClickListener {
-            val intent = Intent(Settings.ACTION_REQUEST_SET_AUTOFILL_SERVICE)
-            intent.data = Uri.parse("package:$packageName")
-            startActivityForResult(intent, 1)
+        reloadButton.setOnClickListener {
+            webView.loadUrl(neptunUrl)
         }
+    }
+
+    private fun showBrowser(setupPanel: LinearLayout, browserBar: LinearLayout) {
+        setupPanel.visibility = View.GONE
+        browserBar.visibility = View.VISIBLE
+        webView.visibility = View.VISIBLE
     }
 
     override fun onResume() {
         super.onResume()
-        tickerRunning = true
-        handler.post(ticker)
+        fillLoopRunning = true
+        handler.post(fillLoop)
     }
 
     override fun onPause() {
         super.onPause()
-        tickerRunning = false
-        handler.removeCallbacks(ticker)
+        fillLoopRunning = false
+        handler.removeCallbacks(fillLoop)
     }
 
-    private fun updateLiveCode() {
-        val secret = SecretStore.load(this)
-        if (secret.isNullOrBlank()) {
-            liveCode.text = "------"
-            liveTimer.text = ""
-            return
-        }
-        liveCode.text = Totp.generate(secret)
-        liveTimer.text = "${Totp.secondsRemaining()}s left"
+    private fun injectCurrentCode() {
+        val secret = SecretStore.load(this) ?: return
+        val code = Totp.generate(secret)
+        val js = buildFillScript(code)
+        webView.evaluateJavascript(js, null)
+    }
+
+    private fun buildFillScript(code: String): String {
+        return """
+            (function() {
+                var code = "$code";
+                var selectors = [
+                    "input[name*='otp' i]", "input[name*='token' i]", "input[name*='code' i]",
+                    "input[id*='otp' i]", "input[id*='token' i]", "input[id*='code' i]",
+                    "input[name*='kod' i]", "input[id*='kod' i]",
+                    "input[maxlength='6']"
+                ];
+                var field = null;
+                for (var i = 0; i < selectors.length; i++) {
+                    field = document.querySelector(selectors[i]);
+                    if (field) break;
+                }
+                if (!field) {
+                    var inputs = Array.prototype.slice.call(document.querySelectorAll('input'));
+                    var visible = inputs.filter(function(el) {
+                        return el.offsetParent !== null && !el.disabled && el.type !== 'hidden';
+                    });
+                    if (visible.length === 1) field = visible[0];
+                }
+                if (field && field.value === '') {
+                    field.focus();
+                    field.value = code;
+                    field.dispatchEvent(new Event('input', { bubbles: true }));
+                    field.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            })();
+        """.trimIndent()
     }
 }

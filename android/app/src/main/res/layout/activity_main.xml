@@ -2,81 +2,65 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:orientation="vertical"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:padding="24dp">
+    android:layout_height="match_parent">
 
-    <TextView
+    <LinearLayout
+        android:id="@+id/setupPanel"
+        android:orientation="vertical"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textStyle="bold"
-        android:textSize="18sp"
-        android:text="Neptun TOTP Autofill" />
+        android:padding="16dp">
 
-    <TextView
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textStyle="bold"
+            android:text="Neptun TOTP secret (base32):" />
+
+        <EditText
+            android:id="@+id/secretInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="e.g. JBSWY3DPEHPK3PXP"
+            android:inputType="textVisiblePassword" />
+
+        <Button
+            android:id="@+id/saveButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Save secret and open Neptun" />
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/browserBar"
+        android:orientation="horizontal"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:layout_marginBottom="16dp"
-        android:text="Personal-use only. Paste your own base32 TOTP secret below. See repository README for full disclaimers." />
+        android:visibility="gone"
+        android:padding="8dp">
 
-    <EditText
-        android:id="@+id/secretInput"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Base32 secret, e.g. JBSWY3DPEHPK3PXP"
-        android:inputType="textVisiblePassword" />
+        <Button
+            android:id="@+id/changeSecretButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Change secret" />
 
-    <Button
-        android:id="@+id/saveButton"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="Save secret" />
+        <Button
+            android:id="@+id/reloadButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Reload" />
 
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="32dp"
-        android:textStyle="bold"
-        android:text="Current code (guaranteed fallback):" />
+    </LinearLayout>
 
-    <TextView
-        android:id="@+id/liveCode"
+    <WebView
+        android:id="@+id/webView"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:textSize="36sp"
-        android:textStyle="bold"
-        android:gravity="center"
-        android:letterSpacing="0.3"
-        android:text="------" />
-
-    <TextView
-        android:id="@+id/liveTimer"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:text="" />
-
-    <Button
-        android:id="@+id/copyButton"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:text="Copy code to clipboard" />
-
-    <Button
-        android:id="@+id/enableButton"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:text="Set as Autofill service" />
-
-    <TextView
-        android:id="@+id/statusText"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:text="" />
+        android:layout_height="0dp"
+        android:layout_weight="1" />
 
 </LinearLayout>
