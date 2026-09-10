@@ -2,20 +2,61 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <style>
-    body { font-family: sans-serif; width: 260px; padding: 10px; }
-    input { width: 100%; box-sizing: border-box; margin-bottom: 8px; padding: 6px; }
-    button { width: 100%; padding: 6px; cursor: pointer; }
-    #code { font-size: 22px; text-align: center; letter-spacing: 4px; margin-top: 8px; }
-    #timer { text-align: center; color: #666; font-size: 12px; }
-  </style>
+  <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <label>Neptun TOTP secret (base32):</label>
-  <input type="text" id="secret" placeholder="e.g. JBSWY3DPEHPK3PXP">
-  <button id="save">Save secret</button>
-  <div id="code"></div>
-  <div id="timer"></div>
+  <div class="app">
+    <header>
+      <div class="logo">🔐</div>
+      <div>
+        <h1>Neptun Authenticator</h1>
+        <p class="subtitle">Encrypted locally &middot; never leaves this device</p>
+      </div>
+    </header>
+
+    <section id="setupView" class="view hidden">
+      <p class="hint">First-time setup: paste your TOTP secret and choose a passphrase. The secret is encrypted before it's stored.</p>
+      <label for="setupSecret">TOTP secret (base32)</label>
+      <div class="input-row">
+        <input type="password" id="setupSecret" placeholder="e.g. JBSWY3DPEHPK3PXP">
+        <button class="ghost toggle" data-target="setupSecret">👁</button>
+      </div>
+      <label for="setupPass">Passphrase</label>
+      <div class="input-row">
+        <input type="password" id="setupPass" placeholder="Choose a passphrase">
+        <button class="ghost toggle" data-target="setupPass">👁</button>
+      </div>
+      <button id="setupSaveBtn" class="primary">Encrypt &amp; Save</button>
+      <p class="error" id="setupError"></p>
+    </section>
+
+    <section id="lockedView" class="view hidden">
+      <div class="status locked"><span class="dot"></span> Locked</div>
+      <p class="hint">Enter your passphrase to unlock this browser session.</p>
+      <div class="input-row">
+        <input type="password" id="unlockPass" placeholder="Passphrase">
+        <button class="ghost toggle" data-target="unlockPass">👁</button>
+      </div>
+      <button id="unlockBtn" class="primary">Unlock</button>
+      <p class="error" id="unlockError"></p>
+      <button id="resetBtn" class="link">Forget saved secret</button>
+    </section>
+
+    <section id="unlockedView" class="view hidden">
+      <div class="status unlocked"><span class="dot"></span> Unlocked</div>
+      <div class="code-card">
+        <div id="liveCode" class="code">------</div>
+        <div class="progress"><div id="progressBar" class="progress-bar"></div></div>
+      </div>
+      <div class="button-row">
+        <button id="copyBtn" class="primary">Copy code</button>
+        <button id="lockBtn" class="secondary">Lock now</button>
+      </div>
+      <button id="resetBtn2" class="link">Forget saved secret</button>
+    </section>
+
+    <footer>Secret is encrypted with AES-GCM (WebCrypto, PBKDF2-derived key). The decrypted code is only ever generated locally and never transmitted anywhere.</footer>
+  </div>
   <script src="totp.js"></script>
   <script src="popup.js"></script>
 </body>

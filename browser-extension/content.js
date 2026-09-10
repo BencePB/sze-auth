@@ -1,4 +1,6 @@
-// Finds the Neptun 2FA code field and fills it with a freshly generated TOTP code.
+// Finds the Neptun 2FA code field and fills it with a freshly generated TOTP
+// code -- but only while the extension is unlocked (secret present in the
+// session-only, in-memory storage). If it's locked, this does nothing.
 
 const CANDIDATE_SELECTORS = [
   "input[name*='otp' i]",
@@ -19,13 +21,13 @@ function findOtpField() {
 }
 
 async function fillCode() {
-  const { totpSecret } = await chrome.storage.local.get("totpSecret");
-  if (!totpSecret) return;
+  const { totpSecretPlain } = await chrome.storage.session.get("totpSecretPlain");
+  if (!totpSecretPlain) return; // locked -- do nothing
 
   const field = findOtpField();
   if (!field) return;
 
-  const code = await generateTOTP(totpSecret);
+  const code = await generateTOTP(totpSecretPlain);
   field.focus();
   field.value = code;
   field.dispatchEvent(new Event("input", { bubbles: true }));

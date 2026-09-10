@@ -1,4 +1,5 @@
-// RFC 6238 TOTP implementation using WebCrypto (no external libraries)
+// RFC 6238 TOTP + AES-GCM encryption helpers, all via WebCrypto (no external libraries).
+// Shared by background.js, content.js, and popup.js.
 
 function base32ToBytes(base32) {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -50,4 +51,51 @@ async function generateTOTP(base32Secret, period = 30, digits = 6) {
 
 function secondsRemaining(period = 30) {
   return period - (Math.floor(Date.now() / 1000) % period);
+}
+
+// --- Encryption at rest (AES-GCM, key derived from passphrase via PBKDF2) ---
+
+function bytesToBase64(bytes) {
+  return btoa(String.fromCharCode(...bytes));
+}
+
+function base64ToBytes(b64) {
+  return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+}
+
+async function deriveAesKey(passphrase, saltBytes, usage) {
+  const enc = new TextEncoder();
+  const baseKey = await crypto.subtle.importKey(
+    "raw", enc.encode(passphrase), "PBKDF2", false, ["deriveKey"]
+  );
+  return crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt: saltBytes, iterations: 150000, hash: "SHA-256" },
+    baseKey,
+    { name: "AES-GCM", length: 256 },
+    false,
+    [usage]
+  );
+}
+
+async function encryptSecret(plainSecret, passphrase) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveAesKey(passphrase, salt, "encrypt");
+  const enc = new TextEncoder();
+  const ciphertextBuf = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, enc.encode(plainSecret));
+  return {
+    ciphertext: bytesToBase64(new Uint8Array(ciphertextBuf)),
+    iv: bytesToBase64(iv),
+    salt: bytesToBase64(salt)
+  };
+}
+
+// Throws if the passphrase is wrong (AES-GCM authentication tag check fails).
+async function decryptSecret(passphrase, stored) {
+  const salt = base64ToBytes(stored.salt);
+  const iv = base64ToBytes(stored.iv);
+  const ciphertextBytes = base64ToBytes(stored.ciphertext);
+  const key = await deriveAesKey(passphrase, salt, "decrypt");
+  const plainBuf = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertextBytes);
+  return new TextDecoder().decode(plainBuf);
 }
